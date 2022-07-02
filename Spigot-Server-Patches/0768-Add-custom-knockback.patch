@@ -191,17 +191,18 @@ index b7b07b652b29e6f84f87fc92add99ce68f8bbd09..3467a2ed06e8d657b70ad90326e9e64e
              // Paper end
          }
 diff --git a/src/main/java/net/minecraft/world/entity/player/EntityHuman.java b/src/main/java/net/minecraft/world/entity/player/EntityHuman.java
-index c39c50e53549e9cb9d3520bc7e8b7e89cfa20163..8c6c6ec243c6e265820f51e4d181c1a84f0f0206 100644
+index c39c50e53549e9cb9d3520bc7e8b7e89cfa20163..f45e2bc631a091f387257b50d28cc814f192b9c1 100644
 --- a/src/main/java/net/minecraft/world/entity/player/EntityHuman.java
 +++ b/src/main/java/net/minecraft/world/entity/player/EntityHuman.java
-@@ -1,5 +1,6 @@
+@@ -1,5 +1,7 @@
  package net.minecraft.world.entity.player;
  
 +import com.github.hexa.knockback.Config;
++import com.github.hexa.knockback.Knockback;
  import com.google.common.collect.ImmutableList;
  import com.google.common.collect.ImmutableMap;
  import com.google.common.collect.Lists;
-@@ -111,7 +112,6 @@ import net.minecraft.world.phys.AxisAlignedBB;
+@@ -111,7 +113,6 @@ import net.minecraft.world.phys.AxisAlignedBB;
  import net.minecraft.world.phys.Vec3D;
  import net.minecraft.world.scores.Scoreboard;
  import net.minecraft.world.scores.ScoreboardTeam;
@@ -209,7 +210,7 @@ index c39c50e53549e9cb9d3520bc7e8b7e89cfa20163..8c6c6ec243c6e265820f51e4d181c1a8
  
  // CraftBukkit start
  import org.bukkit.craftbukkit.entity.CraftHumanEntity;
-@@ -1197,12 +1197,10 @@ public abstract class EntityHuman extends EntityLiving {
+@@ -1197,12 +1198,10 @@ public abstract class EntityHuman extends EntityLiving {
  
                      if (flag5) {
                          if (i > 0) {
@@ -220,7 +221,7 @@ index c39c50e53549e9cb9d3520bc7e8b7e89cfa20163..8c6c6ec243c6e265820f51e4d181c1a8
 -                            }
 -
 +                            //Knockback start - fix inconsistent knockback directions
-+                            Config knockback = new Config();
++                            Config knockback = Knockback.getKnockback().getConfig();
 +                            entity.i((double) (-MathHelper.sin(this.yaw * 0.017453292F) * (float) i * knockback.extraHorizontal), knockback.extraVertical, (double) (MathHelper.cos(this.yaw * 0.017453292F) * (float) i * knockback.extraHorizontal));
 +                            //Knockback end
                              this.setMot(this.getMot().d(0.6D, 1.0D, 0.6D));
