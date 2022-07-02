@@ -1,0 +1,251 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BuildTools <unconfigured@null.spigotmc.org>
+Date: Wed, 1 Jun 2022 19:12:35 +0200
+Subject: [PATCH] Add custom knockback
+
+
+diff --git a/src/main/java/com/github/hexa/knockback/Config.java b/src/main/java/com/github/hexa/knockback/Config.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..092c853bd7fea96a5500d2f8d85c1bb477033f5e
+--- /dev/null
++++ b/src/main/java/com/github/hexa/knockback/Config.java
+@@ -0,0 +1,11 @@
++package com.github.hexa.knockback;
++
++public class Config {
++    public float knockbackHorizontal = 0.4F;
++    public float knockbackVertical = 0.4F;
++    public float frictionHorizontal = 2.0F;
++    public float frictionVertical = 1.75F;
++    public float limitVertical = 0.4F;
++    public float extraHorizontal = 0.5F;
++    public float extraVertical = 0.1F;
++}
+diff --git a/src/main/java/com/github/hexa/knockback/FileUtils.java b/src/main/java/com/github/hexa/knockback/FileUtils.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..345fc92cd5702b627c96af6e4418ecd7ef06f0f3
+--- /dev/null
++++ b/src/main/java/com/github/hexa/knockback/FileUtils.java
+@@ -0,0 +1,37 @@
++package com.github.hexa.knockback;
++
++import java.io.*;
++
++public class FileUtils
++{
++
++    public static void toFile(Object object, File file)
++    {
++        final String jsonContent = GsonUtils.getGsonPretty().toJson(object);
++        try {
++            BufferedWriter bw = new BufferedWriter(new FileWriter(file));
++            bw.write(jsonContent);
++            bw.close();
++        } catch (IOException e) {
++            e.printStackTrace();
++        }
++
++    }
++
++    public static <T> T toObject(File file, Class<T> clazz)
++    {
++        String line;
++        StringBuilder jsonContent = new StringBuilder();
++        BufferedReader objReader = null;
++        try {
++            objReader = new BufferedReader(new FileReader(file));
++            while ((line = objReader.readLine()) != null) {
++                jsonContent.append(line);
++            }
++            return (T) GsonUtils.getGsonPretty().fromJson(jsonContent.toString(), clazz);
++        } catch (IOException e) {
++            e.printStackTrace();
++        }
++        return null;
++    }
++}
+diff --git a/src/main/java/com/github/hexa/knockback/GsonUtils.java b/src/main/java/com/github/hexa/knockback/GsonUtils.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..900ec9da63aa41d0487f19bc007785b1932daf3a
+--- /dev/null
++++ b/src/main/java/com/github/hexa/knockback/GsonUtils.java
+@@ -0,0 +1,19 @@
++package com.github.hexa.knockback;
++
++import com.google.gson.Gson;
++import com.google.gson.GsonBuilder;
++
++public class GsonUtils
++{
++    private static final Gson GSON_PRETTY = new GsonBuilder().setPrettyPrinting().create();
++    private static final Gson GSON = new GsonBuilder().create();
++
++    public static Gson getGsonPretty()
++    {
++        return GSON_PRETTY;
++    }
++    public static Gson getGson()
++    {
++        return GSON;
++    }
++}
+diff --git a/src/main/java/com/github/hexa/knockback/Knockback.java b/src/main/java/com/github/hexa/knockback/Knockback.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..53148c09e0ea601bb3a55ec0695a7ca84ea5ff5c
+--- /dev/null
++++ b/src/main/java/com/github/hexa/knockback/Knockback.java
+@@ -0,0 +1,30 @@
++package com.github.hexa.knockback;
++
++import java.io.File;
++
++public class Knockback {
++    private static Knockback instance;
++    private static final File config_file = new File("KnockbackConfig.json");
++    private Config config;
++
++    public Knockback() {
++        instance = this;
++
++        this.config = new Config();
++        while (!config_file.exists())
++            FileUtils.toFile(this.config, config_file);
++        this.config = FileUtils.toObject(config_file, Config.class);
++    }
++
++    public void reloadConfig() {
++        this.config = FileUtils.toObject(config_file, Config.class);
++    }
++
++    public Config getConfig() {
++        return config;
++    }
++
++    public static Knockback getKnockback() {
++        return instance;
++    }
++}
+diff --git a/src/main/java/net/minecraft/world/entity/EntityLiving.java b/src/main/java/net/minecraft/world/entity/EntityLiving.java
+index b7b07b652b29e6f84f87fc92add99ce68f8bbd09..3467a2ed06e8d657b70ad90326e9e64eed37fa16 100644
+--- a/src/main/java/net/minecraft/world/entity/EntityLiving.java
++++ b/src/main/java/net/minecraft/world/entity/EntityLiving.java
+@@ -1,6 +1,8 @@
+ package net.minecraft.world.entity;
+ 
+ import com.destroystokyo.paper.event.player.PlayerArmorChangeEvent; // Paper
++import com.github.hexa.knockback.Config;
++import com.github.hexa.knockback.Knockback;
+ import com.google.common.base.Objects;
+ import com.google.common.collect.ImmutableList;
+ import com.google.common.collect.ImmutableMap;
+@@ -1664,23 +1666,43 @@ public abstract class EntityLiving extends Entity {
+         // Paper start - add knockbacking entity parameter
+         this.doKnockback(f, d0, d1, null);
+     }
+-    public void doKnockback(float f, double d0, double d1, Entity knockingBackEntity) {
++    public void doKnockback(float f, double x, double z, Entity knockingBackEntity) {
+         // Paper end - add knockbacking entity parameter
+         f = (float) ((double) f * (1.0D - this.b(GenericAttributes.KNOCKBACK_RESISTANCE)));
+         if (f > 0.0F) {
+             this.impulse = true;
+-            Vec3D vec3d = this.getMot();
+-            Vec3D vec3d1 = (new Vec3D(d0, 0.0D, d1)).d().a((double) f);
+ 
+-            this.setMot(vec3d.x / 2.0D - vec3d1.x, this.onGround ? Math.min(0.4D, vec3d.y / 2.0D + (double) f) : vec3d.y, vec3d.z / 2.0D - vec3d1.z);
++            //Knockback start - add custom knockback
++            Config knockback = Knockback.getKnockback().getConfig();
++            Vec3D mot = this.getMot();
++
++            double motX = mot.x;
++            double motY = mot.y;
++            double motZ = mot.x;
++            double magnitude = MathHelper.sqrt((double) (x * x + z * z));
++
++            motX /= knockback.frictionHorizontal;
++            motY /= knockback.frictionVertical;
++            motZ /= knockback.frictionHorizontal;
++
++            motX -= x / magnitude * (double) knockback.knockbackHorizontal;
++            motY += (double) knockback.knockbackVertical;
++            motZ -= z / magnitude * (double) knockback.knockbackHorizontal;
++
++            if (motY > knockback.limitVertical) {
++                motY = knockback.limitVertical;
++            }
++
++            setMot(motX, motY, motZ);
++            //Knocback end
+ 
+             // Paper start - call EntityKnockbackByEntityEvent
+             Vec3D currentMot = this.getMot();
+-            org.bukkit.util.Vector delta = new org.bukkit.util.Vector(currentMot.x - vec3d.x, currentMot.y - vec3d.y, currentMot.z - vec3d.z);
++            org.bukkit.util.Vector delta = new org.bukkit.util.Vector(currentMot.x - mot.x, currentMot.y - mot.y, currentMot.z - mot.z);
+             // Restore old velocity to be able to access it in the event
+-            this.setMot(vec3d);
+-            if (knockingBackEntity == null || new com.destroystokyo.paper.event.entity.EntityKnockbackByEntityEvent((LivingEntity) getBukkitEntity(), knockingBackEntity.getBukkitEntity(), f, delta).callEvent()) {
+-                this.setMot(vec3d.x + delta.getX(), vec3d.y + delta.getY(), vec3d.z + delta.getZ());
++            this.setMot(mot);
++            if (knockingBackEntity == null || new com.destroystokyo.paper.event.entity.EntityKnockbackByEntityEvent((LivingEntity) getBukkitEntity(), knockingBackEntity.getBukkitEntity(), knockback.knockbackHorizontal, delta).callEvent()) {
++                this.setMot(mot.x + delta.getX(), mot.y + delta.getY(), mot.z + delta.getZ());
+             }
+             // Paper end
+         }
+diff --git a/src/main/java/net/minecraft/world/entity/player/EntityHuman.java b/src/main/java/net/minecraft/world/entity/player/EntityHuman.java
+index c39c50e53549e9cb9d3520bc7e8b7e89cfa20163..8c6c6ec243c6e265820f51e4d181c1a84f0f0206 100644
+--- a/src/main/java/net/minecraft/world/entity/player/EntityHuman.java
++++ b/src/main/java/net/minecraft/world/entity/player/EntityHuman.java
+@@ -1,5 +1,6 @@
+ package net.minecraft.world.entity.player;
+ 
++import com.github.hexa.knockback.Config;
+ import com.google.common.collect.ImmutableList;
+ import com.google.common.collect.ImmutableMap;
+ import com.google.common.collect.Lists;
+@@ -111,7 +112,6 @@ import net.minecraft.world.phys.AxisAlignedBB;
+ import net.minecraft.world.phys.Vec3D;
+ import net.minecraft.world.scores.Scoreboard;
+ import net.minecraft.world.scores.ScoreboardTeam;
+-import net.minecraft.world.scores.ScoreboardTeamBase;
+ 
+ // CraftBukkit start
+ import org.bukkit.craftbukkit.entity.CraftHumanEntity;
+@@ -1197,12 +1197,10 @@ public abstract class EntityHuman extends EntityLiving {
+ 
+                     if (flag5) {
+                         if (i > 0) {
+-                            if (entity instanceof EntityLiving) {
+-                                ((EntityLiving) entity).doKnockback((float) i * 0.5F, (double) MathHelper.sin(this.yaw * 0.017453292F), (double) (-MathHelper.cos(this.yaw * 0.017453292F)), this); // Paper
+-                            } else {
+-                                entity.i((double) (-MathHelper.sin(this.yaw * 0.017453292F) * (float) i * 0.5F), 0.1D, (double) (MathHelper.cos(this.yaw * 0.017453292F) * (float) i * 0.5F));
+-                            }
+-
++                            //Knockback start - fix inconsistent knockback directions
++                            Config knockback = new Config();
++                            entity.i((double) (-MathHelper.sin(this.yaw * 0.017453292F) * (float) i * knockback.extraHorizontal), knockback.extraVertical, (double) (MathHelper.cos(this.yaw * 0.017453292F) * (float) i * knockback.extraHorizontal));
++                            //Knockback end
+                             this.setMot(this.getMot().d(0.6D, 1.0D, 0.6D));
+                             // Paper start - Configuration option to disable automatic sprint interruption
+                             if (!world.paperConfig.disableSprintInterruptionOnAttack) {
+diff --git a/src/main/java/org/bukkit/craftbukkit/Main.java b/src/main/java/org/bukkit/craftbukkit/Main.java
+index ecd1f0784493dfc758483b7912ce086c3b0d7aa0..165594b8168149d3d739f22c9236e4f40d00f9fd 100644
+--- a/src/main/java/org/bukkit/craftbukkit/Main.java
++++ b/src/main/java/org/bukkit/craftbukkit/Main.java
+@@ -10,6 +10,8 @@ import java.util.List;
+ import java.util.concurrent.TimeUnit;
+ import java.util.logging.Level;
+ import java.util.logging.Logger;
++
++import com.github.hexa.knockback.Knockback;
+ import joptsimple.OptionParser;
+ import joptsimple.OptionSet;
+ import net.minecraft.util.ExceptionSuppressor;
+@@ -333,6 +335,9 @@ public class Main {
+             tryPreloadClass(LightEngineLayerEventListener.class.getName());
+             tryPreloadClass(ExceptionSuppressor.class.getName());
+             // Paper end
++            //Knockback start
++            new Knockback();
++            //Knockback end
+         }
+     }
+ 
